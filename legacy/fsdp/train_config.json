@@ -1,0 +1,17 @@
+{
+    "model_name_or_path": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+    "train_dataset": "/home/felab/workspace/fsdp/data/stage1_rewrt_train.jsonl",
+    "val_dataset":   "/home/felab/workspace/fsdp/data/stage1_rewrt_valid.jsonl",
+    "output_dir": "./result",
+    "train_type": "train",
+    "batch_size": 8,
+    "lr": 2e-5,
+    "epochs": 2,
+    "save_on_epoch_end": 1,
+    "warmup_proportion": 0.05,
+    "neg_nums": 15,
+    "temperature": 0.02,
+    "query_max_len": 1024,
+    "passage_max_len": 1024,
+    "log_with": "wandb"
+}
