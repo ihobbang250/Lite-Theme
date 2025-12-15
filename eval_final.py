@@ -47,6 +47,9 @@ def load_model(model_type, model_path_or_base, lora_adapter_path=None, max_seq_l
         # LoRA: model_path_or_base로 베이스 로드 후 어댑터 적용
         model = SentenceTransformer(model_path_or_base, trust_remote_code=True)
         try:
+            # 로컬 경로인 경우 절대 경로로 변환
+            if os.path.exists(lora_adapter_path):
+                lora_adapter_path = os.path.abspath(lora_adapter_path)
             model.load_adapter(lora_adapter_path)
             print("LoRA adapter loaded successfully.")
         except Exception as e:

@@ -1,2 +1,7 @@
 .DS_Store
 data/US_desc.parquet
+.env
+wandb
+__pycache__/
+*.log
+models/

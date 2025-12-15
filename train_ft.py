@@ -1,8 +1,9 @@
+import os
 from datasets import load_dataset
 from huggingface_hub import login
 import wandb
-import os
 import argparse
+from dotenv import load_dotenv
 
 from transformers import EarlyStoppingCallback
 from sentence_transformers import (
@@ -13,6 +14,7 @@ from sentence_transformers import (
 from sentence_transformers.training_args import BatchSamplers
 from sentence_transformers.losses import MultipleNegativesRankingLoss
 
+load_dotenv()
 
 parser = argparse.ArgumentParser(description="Hold Evaluation Script")
 
@@ -26,14 +28,15 @@ WANDB_API_KEY = os.environ["WANDB_API_KEY"]
 HF_API_TOKEN  = os.environ["HF_API_TOKEN"]
 wandb.login(key=WANDB_API_KEY)
 login(token=HF_API_TOKEN)
-wandb.init(project="mini-stage1")  # 여기에 원하는 project name, run name
+wandb.init(project="small-stage1")  # 여기에 원하는 project name, run name
 
 # 모델 로드
-BACKBONE_NAME = "sentence-transformers/all-MiniLM-L12-v2"
+BACKBONE_NAME = "Alibaba-NLP/gte-Qwen2-1.5B-instruct"
+
 model = SentenceTransformer(BACKBONE_NAME, trust_remote_code=True)
 
 # Load a dataset to finetune on
-dataset = load_dataset("LUcowork/stage1-dataset")
+dataset = load_dataset("LUcowork/stage1-rewritten-us")
 train_dataset = dataset["train"]
 valid_dataset = dataset["valid"]
 
@@ -54,8 +57,8 @@ MODEL_NAME = "mini-stage1"
 args = SentenceTransformerTrainingArguments(
     output_dir=f"models/{MODEL_NAME}",
     num_train_epochs=1,
-    per_device_train_batch_size=64,
-    per_device_eval_batch_size=32,
+    per_device_train_batch_size=4,
+    per_device_eval_batch_size=4,
     gradient_accumulation_steps=2,
     learning_rate=2e-5,
     warmup_ratio=0.1,
@@ -90,4 +93,4 @@ trainer = SentenceTransformerTrainer(
 trainer.train()
 
 model.save_pretrained(f"models/{MODEL_NAME}/final")
-model.push_to_hub(f"LUcowork/{MODEL_NAME}", private=True, exist_ok=True)
+model.push_to_hub(f"hobbang/{MODEL_NAME}", private=True, exist_ok=True)
