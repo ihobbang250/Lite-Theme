@@ -105,8 +105,12 @@ def get_peft_config(method: str, lora_r: int, lora_alpha: int, lora_dropout: flo
         )
     elif method == "ia3":
         # IA³ (Infused Adapter by Inhibiting and Amplifying Inner Activations)
+        # XLM-RoBERTa/BERT 계열: key, value, intermediate.dense
+        # Qwen/LLaMA 계열: k_proj, v_proj, down_proj
         peft_config = IA3Config(
             task_type=TaskType.FEATURE_EXTRACTION,
+            target_modules=["key", "value", "intermediate.dense", "k_proj", "v_proj", "down_proj"],
+            feedforward_modules=["intermediate.dense", "down_proj"],
         )
     else:
         raise ValueError(f"Unknown method: {method}")
@@ -168,6 +172,20 @@ if quantization_config is not None:
 else:
     model = SentenceTransformer(BASE_MODEL, trust_remote_code=True)
 
+# max_seq_length 설정: 1024 또는 (max_position_embeddings - 2) 중 작은 값
+# XLM-RoBERTa 기반 모델은 position 0,1이 특수 토큰용이므로 -2 필요
+try:
+    max_position_embeddings = model[0].auto_model.config.max_position_embeddings
+    model.max_seq_length = min(1024, max_position_embeddings - 2)
+except Exception:
+    model.max_seq_length = 512
+
+# use_cache=False 설정 (DynamicCache 관련 에러 방지)
+try:
+    model[0].auto_model.config.use_cache = False
+except Exception:
+    pass
+
 # 2. PEFT 적용하기
 peft_config = get_peft_config(
     method=args_cli.method,
@@ -178,8 +196,7 @@ peft_config = get_peft_config(
 
 model.add_adapter(peft_config)
 
-# 모델의 기본 max_seq_length 사용 (일부 모델은 512/514 제한)
-# model.max_seq_length = 512  # 필요시 명시적 설정
+
 
 print(f"=== PEFT Config: {peft_config} ===")
 print(f"=== Max Seq Length: {model.max_seq_length} ===")
@@ -251,22 +268,55 @@ training_time = end_time - start_time
 save_path = f"models/{MODEL_NAME}/final"
 model.save_pretrained(save_path)
 
+# === Adapter 파라미터 수 계산 ===
+def count_adapter_params(model):
+    """Adapter의 학습 가능한 파라미터 수 계산"""
+    trainable_params = 0
+    total_params = 0
+    for name, param in model.named_parameters():
+        total_params += param.numel()
+        if param.requires_grad:
+            trainable_params += param.numel()
+    return trainable_params, total_params
+
+trainable_params, total_params = count_adapter_params(model)
+
 # === 평가 지표 측정 ===
 metrics = {
     "method": args_cli.method,
     "model": BASE_MODEL,
+    # Training config
+    "batch_size": training_args.per_device_train_batch_size,
+    "gradient_accumulation_steps": training_args.gradient_accumulation_steps,
+    "effective_batch_size": training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps,
+    "learning_rate": training_args.learning_rate,
+    "num_epochs": training_args.num_train_epochs,
+    "max_seq_length": model.max_seq_length,
+    # PEFT config
+    "lora_r": args_cli.lora_r if args_cli.method in ["lora", "qlora"] else None,
+    "lora_alpha": args_cli.lora_alpha if args_cli.method in ["lora", "qlora"] else None,
+    "lora_dropout": args_cli.lora_dropout if args_cli.method in ["lora", "qlora"] else None,
+    # Adapter size
+    "trainable_params": trainable_params,
+    "total_params": total_params,
+    "trainable_params_percent": 100 * trainable_params / total_params if total_params > 0 else 0,
+    # Performance metrics
     "peak_gpu_memory_mb": get_gpu_memory_mb(),
     "training_time_seconds": training_time,
     "num_samples": num_samples,
     "throughput_samples_per_sec": num_samples / training_time if training_time > 0 else 0,
     "storage_size_mb": get_dir_size_mb(save_path),
-    "num_epochs": training_args.num_train_epochs,
 }
 
 # 메트릭 출력
 print("\n" + "=" * 50)
 print("=== Training Metrics ===")
 print(f"  Method: {metrics['method']}")
+print(f"  Batch Size: {metrics['batch_size']} (effective: {metrics['effective_batch_size']})")
+print(f"  Learning Rate: {metrics['learning_rate']}")
+if args_cli.method in ["lora", "qlora"]:
+    print(f"  LoRA r={metrics['lora_r']}, alpha={metrics['lora_alpha']}, dropout={metrics['lora_dropout']}")
+print(f"  Trainable Params: {metrics['trainable_params']:,} / {metrics['total_params']:,} ({metrics['trainable_params_percent']:.4f}%)")
 print(f"  Peak GPU VRAM: {metrics['peak_gpu_memory_mb']:.2f} MB")
 print(f"  Training Time: {metrics['training_time_seconds']:.2f} sec")
 print(f"  Throughput: {metrics['throughput_samples_per_sec']:.2f} samples/sec")

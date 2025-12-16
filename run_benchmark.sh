@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# 모든 파인튜닝 방법 벤치마크 (1 epoch) + eval
 # Usage: ./run_benchmark.sh [model_repo]
-
 MODEL=${1:-"intfloat/multilingual-e5-large-instruct"}
+
+#MODEL=${1:-"Alibaba-NLP/gte-Qwen2-1.5B-instruct"}
 MODEL_NAME=$(echo "$MODEL" | cut -d'/' -f2)
 
 echo "=== Benchmarking all methods with 1 epoch ==="

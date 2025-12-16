@@ -61,6 +61,13 @@ def load_model(model_type, model_path_or_base, lora_adapter_path=None, max_seq_l
         print(f"Loading model directly from '{model_path_or_base}'...")
         model = SentenceTransformer(model_path_or_base, trust_remote_code=True)
         #model.max_seq_length = max_seq_length
+    
+    # use_cache=False 설정 (DynamicCache 관련 에러 방지)
+    try:
+        model[0].auto_model.config.use_cache = False
+    except Exception:
+        pass
+    
     return model
 
 def encode_texts(model, texts, **kwargs):
